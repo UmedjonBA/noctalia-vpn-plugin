@@ -74,6 +74,24 @@ The bridge (`plugin/dbus-bridge.py`) will also auto-spawn the backend when the
 plugin loads if the DBus name isn't already owned — the systemd unit just gets
 it up before the bar so the first paint already shows live status.
 
+### TUN/VPN mode setup
+
+TUN mode needs `CAP_NET_ADMIN` on `sing-box`. The plugin will ask polkit for
+permission to set the capability the first time you switch to TUN mode — you'll
+get a normal "authenticate" dialog.
+
+Install the polkit action (one-time, recommended):
+
+```bash
+sudo cp polkit/org.noctalia.vpn.policy /usr/share/polkit-1/actions/
+```
+
+Or grant the capability manually (no polkit dialog after this):
+
+```bash
+sudo setcap cap_net_admin+ep /usr/bin/sing-box
+```
+
 ## Usage
 
 1. Add the Noctalia VPN widget to your bar.
