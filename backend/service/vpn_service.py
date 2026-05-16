@@ -67,6 +67,13 @@ class VpnService:
         self._log_streamer.start()
         self._traffic: Optional[TrafficMonitor] = None
         self._traffic_listeners: list = []
+        # Latched once getcap confirms CAP_NET_ADMIN on /usr/bin/sing-box, so
+        # subsequent TUN starts never re-prompt via pkexec. setcap is sticky
+        # on the binary, so this latch is safe for the daemon's lifetime.
+        self._tun_caps_granted = False
+        # Serializes pkexec invocations so a duplicate caller can't open a
+        # second polkit dialog while the first one is still on screen.
+        self._tun_caps_lock = asyncio.Lock()
         # Subscription manager (initialized in bootstrap)
         from backend.subscription.manager import SubscriptionManager
         self._subs = SubscriptionManager(self)
@@ -795,20 +802,34 @@ class VpnService:
         return True
 
     async def _check_tun_caps(self) -> bool:
+        if self._tun_caps_granted:
+            return True
         rc, stdout = await self._run_capture(["getcap", "/usr/bin/sing-box"])
         if rc != 0:
             return False
-        return "cap_net_admin" in stdout.lower()
+        if "cap_net_admin" in stdout.lower():
+            self._tun_caps_granted = True
+            return True
+        return False
 
     async def _grant_tun_caps(self) -> bool:
+        # pkexec/setcap is meaningful only for TUN mode — refuse to prompt
+        # the user during a system-proxy switch.
+        if self.state.settings.proxyMode != "tun":
+            return False
         if shutil.which("pkexec") is None:
             return False
-        rc = await self._run(
-            ["pkexec", "setcap", "cap_net_admin+ep", "/usr/bin/sing-box"]
-        )
-        if rc != 0:
-            return False
-        return await self._check_tun_caps()
+        async with self._tun_caps_lock:
+            # A concurrent caller may have already granted caps while we were
+            # waiting for the lock; re-check before firing pkexec again.
+            if await self._check_tun_caps():
+                return True
+            rc = await self._run(
+                ["pkexec", "setcap", "cap_net_admin+ep", "/usr/bin/sing-box"]
+            )
+            if rc != 0:
+                return False
+            return await self._check_tun_caps()
 
     # ----------------------------------------------------------------- low-level
 

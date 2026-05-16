@@ -39,6 +39,28 @@ Python (installed via the `.venv` below):
 - `aiohttp` ≥ 3.9
 - `aiohttp-socks` (for the speed test to measure through the tunnel)
 
+## TUN/VPN mode prerequisites
+
+TUN (VPN) mode requires additional privileges for sing-box.
+
+**Option A — One-time setup (recommended):**
+Grant CAP_NET_ADMIN to sing-box permanently:
+```bash
+sudo setcap cap_net_admin+ep /usr/bin/sing-box
+```
+After this, no password prompts when using TUN mode.
+
+**Option B — Polkit (automatic password prompt):**
+The plugin will automatically request privileges via Polkit dialog when TUN mode is activated.
+
+Install the included Polkit rules to avoid repeated password prompts for DNS/routing operations:
+```bash
+sudo install -m 0644 polkit/10-noctalia-vpn-tun.rules /etc/polkit-1/rules.d/
+sudo install -m 0644 polkit/org.noctalia.vpn.policy /usr/share/polkit-1/actions/
+```
+
+**Note:** System Proxy mode works without any additional privileges.
+
 ## Installation
 
 ### Install backend
@@ -76,21 +98,9 @@ it up before the bar so the first paint already shows live status.
 
 ### TUN/VPN mode setup
 
-TUN mode needs `CAP_NET_ADMIN` on `sing-box`. The plugin will ask polkit for
-permission to set the capability the first time you switch to TUN mode — you'll
-get a normal "authenticate" dialog.
-
-Install the polkit action (one-time, recommended):
-
-```bash
-sudo cp polkit/org.noctalia.vpn.policy /usr/share/polkit-1/actions/
-```
-
-Or grant the capability manually (no polkit dialog after this):
-
-```bash
-sudo setcap cap_net_admin+ep /usr/bin/sing-box
-```
+See [TUN/VPN mode prerequisites](#tunvpn-mode-prerequisites) above for the
+capability and Polkit setup. TL;DR: either `setcap` once, or install the two
+files in `polkit/`.
 
 ## Usage
 
